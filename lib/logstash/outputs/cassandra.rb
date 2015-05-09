@@ -34,9 +34,18 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   # Number of seconds to wait after failure before retrying
   config :retry_delay, :validate => :number, :default => 3, :required => false
   
+  # Ignore bad message
+  config :ignore_bad_message, :validate => :boolean, :default => false
+  
+  # Batch size
+  config :batch_size, :validate => :number, :default => 1
+
   public
   def register
     require "cassandra"
+
+    @statement_cache = {}
+    @batch = []
     
     cluster = Cassandra.cluster(
       username: @username,
@@ -62,6 +71,12 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       # to be able to use elasticsearch input plugin directly
       msg.reject!{|key, value| %r{^@} =~ key}
     end
+
+    if msg.nil? and @ignore_bad_message
+      @logger.warn("Failed to get message from source. Skip it.",
+                    :event => event)
+      return
+    end
     
     # convert values to Cassandra format
     @hints.each do |key, value|
@@ -80,16 +95,26 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
         end
       end
     end
+
+    @batch.push(msg)
+
+    return if @batch.length < @batch_size
     
     @logger.info("Data to be stored", :msg => msg)
     
     begin
-      statement = @session.prepare(
-        "INSERT INTO #{@keyspace}.#{@table} (#{msg.keys.join(', ')})
-        VALUES (#{("?"*msg.keys.count).split(//)*", "})")
-      @session.execute(
-        statement, :arguments => msg.values
-      )
+      batch = @session.batch do |b|
+        @batch.each do |msg|
+          query = "INSERT INTO #{@keyspace}.#{@table} (#{msg.keys.join(', ')})
+            VALUES (#{("?"*msg.keys.count).split(//)*", "})"
+
+          @statement_cache[query] = @session.prepare(query) unless @statement_cache.key?(query)
+          b.add(@statement_cache[query], msg.values)
+        end
+      end
+      @session.execute(batch,  consistency: :all)
+      @batch.clear
+      @logger.info "Batch sent"
     rescue => e
       @logger.warn("Failed to send event to Cassandra",
                     :event => event, :exception => e, :backtrace => e.backtrace)
