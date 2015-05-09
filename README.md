@@ -1,79 +1,51 @@
-# Logstash Plugin
+# Logstash Cassandra Output Plugin
 
 This is a plugin for [Logstash](https://github.com/elasticsearch/logstash).
 
 It is fully free and fully open source. The license is Apache 2.0, meaning you are pretty much free to use it however you want in whatever way.
 
-## Documentation
+## Usage
 
-Logstash provides infrastructure to automatically generate documentation for this plugin. We use the asciidoc format to write documentation so any comments in the source code will be first converted into asciidoc and then into html. All plugin documentation are placed under one [central location](http://www.elasticsearch.org/guide/en/logstash/current/).
+<pre><code>
+output {
+    cassandra {
+        # Credentials of a target Cassandra, keyspace and table
+        # where you want to stream data to.
+        username => "cassandra"
+        password => "cassandra"
+        hosts => ["127.0.0.1"]
+        keyspace => "logs"
+        table => "query_log"
+        
+        # Where from the event hash to take a message
+        source => "payload"
+        
+        # if cassandra does not understand formats of data
+        # you feeds it with, just provide some hints here
+        hints => {
+            id => "int"
+            at => "timestamp"
+            resellerId => "int"
+            errno => "int"
+            duration => "float"
+            ip => "inet"}
+            
+        # Sometimes it's usefull to ignore failed messages, 
+        # in the case set ignore_bad_message to True.
+        # By default it is False
+        ignore_bad_message => true
+        
+        # Datastax cassandra driver supports batch insert.
+        # You can define the batch size explicitely.
+        # By default it is 1.
+        batch_size => 100
+    }
+}
+</code></pre>
 
-- For formatting code or config example, you can use the asciidoc `[source,ruby]` directive
-- For more asciidoc formatting tips, see the excellent reference here https://github.com/elasticsearch/docs#asciidoc-guide
-
-## Need Help?
-
-Need help? Try #logstash on freenode IRC or the logstash-users@googlegroups.com mailing list.
-
-## Developing
-
-### 1. Plugin Developement and Testing
-
-#### Code
-- To get started, you'll need JRuby with the Bundler gem installed.
-
-- Create a new plugin or clone and existing from the GitHub [logstash-plugins](https://github.com/logstash-plugins) organization. We also provide [example plugins](https://github.com/logstash-plugins?query=example).
-
-- Install dependencies
-```sh
-bundle install
-```
-
-#### Test
-
-- Update your dependencies
-
-```sh
-bundle install
-```
-
-- Run tests
-
-```sh
-bundle exec rspec
-```
-
-### 2. Running your unpublished Plugin in Logstash
-
-#### 2.1 Run in a local Logstash clone
-
-- Edit Logstash `Gemfile` and add the local plugin path, for example:
-```ruby
-gem "logstash-filter-awesome", :path => "/your/local/logstash-filter-awesome"
-```
-- Install plugin
-```sh
-bin/plugin install --no-verify
-```
-- Run Logstash with your plugin
-```sh
-bin/logstash -e 'filter {awesome {}}'
-```
-At this point any modifications to the plugin code will be applied to this local Logstash setup. After modifying the plugin, simply rerun Logstash.
-
-#### 2.2 Run in an installed Logstash
-
-You can use the same **2.1** method to run your plugin in an installed Logstash by editing its `Gemfile` and pointing the `:path` to your local plugin development directory or you can build the gem and install it using:
-
-- Build your plugin gem
-```sh
-gem build logstash-filter-awesome.gemspec
-```
-- Install the plugin from the Logstash home
-```sh
-bin/plugin install /your/local/plugin/logstash-filter-awesome.gem
-```
-- Start Logstash and proceed to test the plugin
+## TODO
+1. Testing Testing Testing
+1. Implement a mechanism to flush a batch to cassandra even in the case when an amount of collected messages is lesser than <code>batch_size</code>
 
 ## Contributing
 
