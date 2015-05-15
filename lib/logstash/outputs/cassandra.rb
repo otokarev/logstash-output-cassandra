@@ -35,7 +35,10 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   config :retry_delay, :validate => :number, :default => 3, :required => false
   
   # Ignore bad message
-  config :ignore_bad_message, :validate => :boolean, :default => false
+  config :ignore_bad_messages, :validate => :boolean, :default => false
+  
+  # Ignore bad values
+  config :ignore_bad_values, :validate => :boolean, :default => false
   
   # Batch size
   config :batch_size, :validate => :number, :default => 1
@@ -43,6 +46,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   public
   def register
     require "cassandra"
+    @@r = 0
 
     @statement_cache = {}
     @batch = []
@@ -72,29 +76,13 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       msg.reject!{|key, value| %r{^@} =~ key}
     end
 
-    if msg.nil? and @ignore_bad_message
+    if msg.nil? and @ignore_bad_messages
       @logger.warn("Failed to get message from source. Skip it.",
                     :event => event)
       return
     end
     
-    # convert values to Cassandra format
-    @hints.each do |key, value|
-      if msg.key?(key)
-        msg[key] = case value
-        when 'int'
-          msg[key].to_i
-        when 'uuid'
-          Cassandra::Types::Uuid.new(msg[key])
-        when 'timestamp'
-          Cassandra::Types::Timestamp.new(Time::parse(msg[key]))
-        when 'inet'
-          Cassandra::Types::Inet.new(msg[key])
-        when 'float'
-          Cassandra::Types::Float.new(msg[key])
-        end
-      end
-    end
+    convertToCassandraFormat! msg
 
     @batch.push(msg)
 
@@ -122,4 +110,49 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       retry
     end
   end # def receive
+
+  private
+  def convertToCassandraFormat! msg
+    @hints.each do |key, value|
+      if msg.key?(key)
+        begin
+          msg[key] = case value
+          when 'int'
+            msg[key].to_i
+          when 'uuid'
+            Cassandra::Types::Uuid.new(msg[key])
+          when 'timestamp'
+            Cassandra::Types::Timestamp.new(Time::parse(msg[key]))
+          when 'inet'
+            Cassandra::Types::Inet.new(msg[key])
+          when 'float'
+            Cassandra::Types::Float.new(msg[key])
+          end
+        rescue Exception => e
+          # Ok, cannot convert the value, let's assign it in default one
+          if @ignore_bad_values
+            bad_value = msg[key]
+            msg[key] = case value
+            when 'int'
+              0
+            when 'uuid'
+              Cassandra::Uuid.new("00000000-0000-0000-0000-000000000000")
+            when 'timestamp'
+              Cassandra::Types::Timestamp.new(Time::parse("1970-01-01 00:00:00"))
+            when 'inet'
+              Cassandra::Types::Inet.new("0.0.0.0")
+            when 'float'
+              Cassandra::Types::Float.new(0)
+            end
+            @logger.warn("Cannot convert `#{key}` value (`#{bad_value}`) to `#{value}` type, set to `#{msg[key]}`",
+                         :exception => e, :backtrace => e.backtrace)
+          else 
+            @logger.fatal("Cannot convert `#{key}` value (`#{msg[key]}`) to `#{value}` type",
+                          :exception => e, :backtrace => e.backtrace)
+            raise
+          end
+        end
+      end
+    end
+  end
 end # class LogStash::Outputs::Cassandra
