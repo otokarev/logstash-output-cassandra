@@ -83,7 +83,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       loop do
         stop_it = Thread.current["stop_it"]
         sleep(@batch_processor_thread_period)
-        sendBatchToCassandra stop_it
+        send_batch2cassandra stop_it
         return if stop_it
       end
     end
@@ -92,7 +92,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       loop do
         stop_it = Thread.current["stop_it"]
         sleep(@retry_delay)
-        resendBatchToCassandra stop_it
+        resend_batch2cassandra stop_it
         return if stop_it
       end
     end
@@ -108,7 +108,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       msg = event.to_hash
       # Filter out @timestamp, @version, etc
       # to be able to use elasticsearch input plugin directly
-      msg.reject!{|key, value| %r{^@} =~ key}
+      msg.reject!{|key| %r{^@} =~ key}
     end
 
     if msg.nil? and @ignore_bad_messages
@@ -117,28 +117,28 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       return
     end
     
-    convertToCassandraFormat! msg
+    convert2cassandra_format! msg
 
     @batch_msg_queue.push(msg)
     @logger.info("Data to be stored", :msg => msg)
   end # def receive
 
   private
-  def sendBatchToCassandra
+  def send_batch2cassandra
     return if @batch_msg_queue.empty?
     begin
-      batch = prepareBatch
+      batch = prepare_batch
       return if batch.nil?
       @session.execute(batch,  consistency: :all)
       batch.clear
       @logger.info "Batch sent"
     rescue => e
-      @failed_batch_queue.push {:batch => batch, :try_count => 0}
+      @failed_batch_queue.push({:batch => batch, :try_count => 0})
     end
   end
 
   private
-  def prepareBatch()
+  def prepare_batch()
     statement_and_values = []
     while statement_and_values.length < @batch_size and !@batch_msg_queue.empty?
       msg = @batch_msg_queue.pop
@@ -159,7 +159,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   end
 
   private
-  def resendBatchToCassandra
+  def resend_batch2cassandra
     while @failed_batch_queue.empty?
       batch_container = @failed_batch_queue.pop
       begin
@@ -171,7 +171,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
           @logger.fatal("Failed to send batch to Cassandra in #{@max_retries} tries",
             :batch => batch_container[:batch])
         else
-          @failed_batch_queue.push {:batch => batch, :try_count => batch_container[:try_count] + 1}
+          @failed_batch_queue.push({:batch => batch, :try_count => batch_container[:try_count] + 1})
         end
       end
       sleep(@retry_delay)
@@ -188,7 +188,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   end
 
   private
-  def convertToCassandraFormat! msg
+  def convert2cassandra_format! msg
     @hints.each do |key, value|
       if msg.key?(key)
         begin
