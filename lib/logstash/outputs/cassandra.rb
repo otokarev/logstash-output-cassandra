@@ -120,20 +120,23 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
     convert2cassandra_format! msg
 
     @batch_msg_queue.push(msg)
-    @logger.info("Data to be stored", :msg => msg)
+    @logger.info("Queue message to be sent")
   end # def receive
 
   private
-  def send_batch2cassandra
-    return if @batch_msg_queue.empty?
-    begin
-      batch = prepare_batch
-      return if batch.nil?
-      @session.execute(batch,  consistency: :all)
-      batch.clear
-      @logger.info "Batch sent"
-    rescue => e
-      @failed_batch_queue.push({:batch => batch, :try_count => 0})
+  def send_batch2cassandra stop_it = false
+    loop do
+      return if @batch_msg_queue.length < @batch_size and !stop_it
+      begin
+        batch = prepare_batch
+        return if batch.nil?
+        @session.execute(batch,  consistency: :all)
+        batch.clear
+        @logger.info "Batch sent successfully"
+      rescue => e
+        @logger.warn "Fail to send batch. Schedule it to send later."
+        @failed_batch_queue.push({:batch => batch, :try_count => 0})
+      end
     end
   end
 
@@ -160,18 +163,21 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
 
   private
   def resend_batch2cassandra
-    while @failed_batch_queue.empty?
+    while !@failed_batch_queue.empty?
       batch_container = @failed_batch_queue.pop
+      batch = batch_container[:batch]
+      count = batch_container[:try_count]
       begin
         @session.execute(batch,  consistency: :all)
-        batch_container[:batch].clear
+        batch.clear
         @logger.info "Batch sent"
       rescue => e
-        if batch_container[:try_count] > @max_retries
+        if count > @max_retries
           @logger.fatal("Failed to send batch to Cassandra in #{@max_retries} tries",
-            :batch => batch_container[:batch])
+            :batch => batch)
         else
-          @failed_batch_queue.push({:batch => batch, :try_count => batch_container[:try_count] + 1})
+          @failed_batch_queue.push({:batch => batch, :try_count => count + 1})
+          @logger.warn("Failed to send batch again. Reschedule it.")
         end
       end
       sleep(@retry_delay)
