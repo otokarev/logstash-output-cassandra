@@ -133,8 +133,8 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
         @session.execute(batch,  consistency: :all)
         batch.clear
         @logger.info "Batch sent successfully"
-      rescue => e
-        @logger.warn "Fail to send batch. Schedule it to send later."
+      rescue Exception => e
+        @logger.warn "Fail to send batch (error: #{e.to_s}). Schedule it to send later."
         @failed_batch_queue.push({:batch => batch, :try_count => 0})
       end
     end
@@ -171,9 +171,9 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
         @session.execute(batch,  consistency: :all)
         batch.clear
         @logger.info "Batch sent"
-      rescue => e
+      rescue Exception => e
         if count > @max_retries
-          @logger.fatal("Failed to send batch to Cassandra in #{@max_retries} tries",
+          @logger.fatal("Failed to send batch to Cassandra (error: #{e.to_s}) in #{@max_retries} tries",
             :batch => batch)
         else
           @failed_batch_queue.push({:batch => batch, :try_count => count + 1})
