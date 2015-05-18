@@ -177,7 +177,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
             :batch => batch)
         else
           @failed_batch_queue.push({:batch => batch, :try_count => count + 1})
-          @logger.warn("Failed to send batch again. Reschedule it.")
+          @logger.warn("Failed to send batch again (error: #{e.to_s}). Reschedule it.")
         end
       end
       sleep(@retry_delay)
