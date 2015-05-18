@@ -33,6 +33,9 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
 
   # Number of seconds to wait after failure before retrying
   config :retry_delay, :validate => :number, :default => 3, :required => false
+
+  # Set max retry for each batch
+  config :max_retries, :validate => :number, :default => 3
   
   # Ignore bad message
   config :ignore_bad_messages, :validate => :boolean, :default => false
@@ -43,10 +46,24 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   # Batch size
   config :batch_size, :validate => :number, :default => 1
 
+  # Batch batch processor tic (sec)
+  config :batch_processor_thread_period, :validate => :number, :default => 1
+
   public
   def register
+    require "thread"
     require "cassandra"
     @@r = 0
+
+    # Messages collector. When @batch_msg_queue.length > batch_size
+    # batch_size of messages are sent to Cassandra
+    @batch_msg_queue = Queue.new
+
+    # Failed batches collector. Every retry_delay secs batches from the queue
+    # are pushed to Cassandra. If a try is failed a batch.try_count is incremented.
+    # If batch.try_count > max_retries, the batch is rejected
+    # with error message in error log
+    @failed_batch_queue = Queue.new
 
     @statement_cache = {}
     @batch = []
@@ -61,6 +78,24 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
     
     @logger.info("New Cassandra output", :username => @username,
                 :hosts => @hosts, :keyspace => @keyspace, :table => @table)
+
+    @batch_processor_thread = Thread.new do
+      loop do
+        stop_it = Thread.current["stop_it"]
+        sleep(@batch_processor_thread_period)
+        sendBatchToCassandra stop_it
+        return if stop_it
+      end
+    end
+
+    @failed_batch_processor_thread = Thread.new do
+      loop do
+        stop_it = Thread.current["stop_it"]
+        sleep(@retry_delay)
+        resendBatchToCassandra stop_it
+        return if stop_it
+      end
+    end
   end # def register
 
   public
@@ -84,32 +119,73 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
     
     convertToCassandraFormat! msg
 
-    @batch.push(msg)
-
-    return if @batch.length < @batch_size
-    
+    @batch_msg_queue.push(msg)
     @logger.info("Data to be stored", :msg => msg)
-    
-    begin
-      batch = @session.batch do |b|
-        @batch.each do |msg|
-          query = "INSERT INTO #{@keyspace}.#{@table} (#{msg.keys.join(', ')})
-            VALUES (#{("?"*msg.keys.count).split(//)*", "})"
+  end # def receive
 
-          @statement_cache[query] = @session.prepare(query) unless @statement_cache.key?(query)
-          b.add(@statement_cache[query], msg.values)
-        end
-      end
+  private
+  def sendBatchToCassandra
+    return if @batch_msg_queue.empty?
+    begin
+      batch = prepareBatch
+      return if batch.nil?
       @session.execute(batch,  consistency: :all)
-      @batch.clear
+      batch.clear
       @logger.info "Batch sent"
     rescue => e
-      @logger.warn("Failed to send event to Cassandra",
-                    :event => event, :exception => e, :backtrace => e.backtrace)
-      sleep @retry_delay
-      retry
+      @failed_batch_queue.push {:batch => batch, :try_count => 0}
     end
-  end # def receive
+  end
+
+  private
+  def prepareBatch()
+    statement_and_values = []
+    while statement_and_values.length < @batch_size and !@batch_msg_queue.empty?
+      msg = @batch_msg_queue.pop
+      query = "INSERT INTO #{@keyspace}.#{@table} (#{msg.keys.join(', ')})
+        VALUES (#{("?"*msg.keys.count).split(//)*", "})"
+
+      @statement_cache[query] = @session.prepare(query) unless @statement_cache.key?(query)
+      statement_and_values << [@statement_cache[query], msg.values]
+    end
+    return nil if statement_and_values.empty?
+
+    batch = @session.batch do |b|
+      statement_and_values.each do |v|
+        b.add(v[0], [1])
+      end
+    end
+    return batch
+  end
+
+  private
+  def resendBatchToCassandra
+    while @failed_batch_queue.empty?
+      batch_container = @failed_batch_queue.pop
+      begin
+        @session.execute(batch,  consistency: :all)
+        batch_container[:batch].clear
+        @logger.info "Batch sent"
+      rescue => e
+        if batch_container[:try_count] > @max_retries
+          @logger.fatal("Failed to send batch to Cassandra in #{@max_retries} tries",
+            :batch => batch_container[:batch])
+        else
+          @failed_batch_queue.push {:batch => batch, :try_count => batch_container[:try_count] + 1}
+        end
+      end
+      sleep(@retry_delay)
+    end
+  end
+
+  public
+  def teardown
+    @batch_processor_thread["stop_it"] = true
+    @batch_processor_thread.join
+
+    @failed_batch_processor_thread["stop_it"] = true
+    @failed_batch_processor_thread.join
+  end
 
   private
   def convertToCassandraFormat! msg
