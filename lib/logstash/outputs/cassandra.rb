@@ -155,7 +155,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
 
     batch = @session.batch do |b|
       statement_and_values.each do |v|
-        b.add(v[0], [1])
+        b.add(v[0], v[1])
       end
     end
     return batch
