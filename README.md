@@ -30,10 +30,20 @@ output {
             duration => "float"
             ip => "inet"}
             
-        # Sometimes it's usefull to ignore failed messages, 
-        # in the case set ignore_bad_message to True.
+        # Sometimes it's usefull to ignore malformed messages
+        # (e.x. source contains nothing),
+        # in the case set ignore_bad_messages to True.
         # By default it is False
-        ignore_bad_message => true
+        ignore_bad_messages => true
+        
+        # Sometimes it's usefull to ignore problems with a convertation
+        # of a received value to Cassandra format and set some default
+        # value (inet: 0.0.0.0, float: 0.0, int: 0,
+        # uuid: 00000000-0000-0000-0000-000000000000,
+        # timestamp: 1970-01-01 00:00:00) in the case set
+        # ignore_bad_messages to True.
+        # By default it is False
+        ignore_bad_values => true
         
         # Datastax cassandra driver supports batch insert.
         # You can define the batch size explicitely.
