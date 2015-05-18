@@ -131,7 +131,6 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
         batch = prepare_batch
         return if batch.nil?
         @session.execute(batch,  consistency: :all)
-        batch.clear
         @logger.info "Batch sent successfully"
       rescue Exception => e
         @logger.warn "Fail to send batch (error: #{e.to_s}). Schedule it to send later."
@@ -169,7 +168,6 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       count = batch_container[:try_count]
       begin
         @session.execute(batch,  consistency: :all)
-        batch.clear
         @logger.info "Batch sent"
       rescue Exception => e
         if count > @max_retries
