@@ -84,7 +84,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
         stop_it = Thread.current["stop_it"]
         sleep(@batch_processor_thread_period)
         send_batch2cassandra stop_it
-        return if stop_it
+        break if stop_it
       end
     end
 
@@ -93,7 +93,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
         stop_it = Thread.current["stop_it"]
         sleep(@retry_delay)
         resend_batch2cassandra
-        return if stop_it
+        break if stop_it
       end
     end
   end # def register
@@ -126,10 +126,10 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   private
   def send_batch2cassandra stop_it = false
     loop do
-      return if @batch_msg_queue.length < @batch_size and !stop_it
+      break if @batch_msg_queue.length < @batch_size and !stop_it
       begin
         batch = prepare_batch
-        return if batch.nil?
+        break if batch.nil?
         @session.execute(batch,  consistency: :all)
         @logger.info "Batch sent successfully"
       rescue Exception => e
