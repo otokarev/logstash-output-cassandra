@@ -92,7 +92,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       loop do
         stop_it = Thread.current["stop_it"]
         sleep(@retry_delay)
-        resend_batch2cassandra stop_it
+        resend_batch2cassandra
         return if stop_it
       end
     end
