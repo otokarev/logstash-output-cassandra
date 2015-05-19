@@ -46,7 +46,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   # Batch size
   config :batch_size, :validate => :number, :default => 1
 
-  # Batch batch processor tic (sec)
+  # Batch processor tic (sec)
   config :batch_processor_thread_period, :validate => :number, :default => 1
 
   public

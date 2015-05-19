@@ -49,13 +49,36 @@ output {
         # You can define the batch size explicitely.
         # By default it is 1.
         batch_size => 100
+        
+        # Every batch_processor_thread_period sec. a special thread
+        # pushes all collected messages to Cassandra. By default it is 1 (sec.)
+        batch_processor_thread_period => 1
+        
+        # max max_retries times the plugin will push failed batches
+        # to Cassandra before give up. By defult it is 3.
+        max_retries => 3
+        
+        # retry_delay secs. between two sequential tries to push a failed batch
+        # to Cassandra. By default it is 3 (secs.)
+        retry_delay => 3
     }
 }
 </code></pre>
 
+## Installation instructions
+For CentOS 6.6, logstash-1.4.2-1_2c0f5a1.noarch
+<pre><code>
+git clone https://github.com/otokarev/logstash-output-cassandra.git \
+&& cd logstash-output-cassandra.git \
+&& gem build logstash-output-cassandra.gemspec \
+&& env GEM_HOME=/opt/logstash/vendor/bundle/jruby/1.9/ GEM_PATH="" \
+&& java -jar /opt/logstash/vendor/jar/jru^C-complete-1.7.11.jar -S \
+&& gem install logstash-output-cassandra-0.1.0.gem
+</code></pre>
+
 ## TODO
 1. Testing Testing Testing
-1. Implement a mechanism to flush a batch to cassandra even in the case when an amount of collected messages is lesser than <code>batch_size</code>
+
 
 ## Contributing
 
