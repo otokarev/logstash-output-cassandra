@@ -11,7 +11,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
   config_name "cassandra"
 
   # Cassandra server hostname or IP-address
-  config :hosts, :validate => :string, :required => true
+  config :hosts, :validate => :array, :required => true
   
   # The keyspace to use
   config :keyspace, :validate => :string, :required => true
