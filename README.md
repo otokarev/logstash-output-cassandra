@@ -16,6 +16,12 @@ output {
         hosts => ["127.0.0.1"]
         keyspace => "logs"
         table => "query_log"
+        # Cassandra consistency level.
+        # Options: "any", "one", "two", "three", "quorum", "all",
+        #    "local_quorum", "each_quorum", "serial", "local_serial",
+        #    "local_one"
+        # Default: "one"
+        consistency => "all"
         
         # Where from the event hash to take a message
         source => "payload"
@@ -77,8 +83,6 @@ git clone https://github.com/otokarev/logstash-output-cassandra.git \
 </code></pre>
 
 ## TODO
-1. Testing Testing Testing
-
 
 ## Contributing
 

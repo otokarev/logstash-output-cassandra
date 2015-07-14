@@ -10,8 +10,13 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
 
   config_name "cassandra"
 
-  # Cassandra server hostname or IP-address
+  # List of Cassandra hostname(s) or IP-address(es)
   config :hosts, :validate => :array, :required => true
+
+  # Cassandra consistency level.
+  # Options: "any", "one", "two", "three", "quorum", "all", "local_quorum", "each_quorum", "serial", "local_serial", "local_one"
+  # Default: "one"
+  config :consistency, :validate => ["any", "one", "two", "three", "quorum", "all", "local_quorum", "each_quorum", "serial", "local_serial", "local_one"], :default => "one"
   
   # The keyspace to use
   config :keyspace, :validate => :string, :required => true
@@ -71,7 +76,8 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
     cluster = Cassandra.cluster(
       username: @username,
       password: @password,
-      hosts: @hosts
+      hosts: @hosts,
+      consistency: @consistency.to_sym
     )
     
     @session  = cluster.connect(@keyspace)
@@ -130,7 +136,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       begin
         batch = prepare_batch
         break if batch.nil?
-        @session.execute(batch,  consistency: :all)
+        @session.execute(batch)
         @logger.info "Batch sent successfully"
       rescue Exception => e
         @logger.warn "Fail to send batch (error: #{e.to_s}). Schedule it to send later."
@@ -167,7 +173,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       batch = batch_container[:batch]
       count = batch_container[:try_count]
       begin
-        @session.execute(batch,  consistency: :all)
+        @session.execute(batch)
         @logger.info "Batch sent"
       rescue Exception => e
         if count > @max_retries
