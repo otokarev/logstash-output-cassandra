@@ -117,10 +117,15 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       msg.reject!{|key| %r{^@} =~ key}
     end
 
-    if msg.nil? and @ignore_bad_messages
-      @logger.warn("Failed to get message from source. Skip it.",
-                    :event => event)
-      return
+    if !msg.is_a?(Hash)
+        if @ignore_bad_messages
+            @logger.warn("Failed to get message from source. Skip it.",
+                :event => event)
+            return
+        end
+        @logger.fatal("Failed to get message from source. Source is empty or it is not a hash.",
+            :event => event)
+        raise "Failed to get message from source. Source is empty or it is not a hash."
     end
     
     convert2cassandra_format! msg
@@ -139,7 +144,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
         @session.execute(batch)
         @logger.info "Batch sent successfully"
       rescue Exception => e
-        @logger.warn "Fail to send batch (error: #{e.to_s}). Schedule it to send later."
+        @logger.warn "Failed to send batch (error: #{e.to_s}). Schedule it to send later."
         @failed_batch_queue.push({:batch => batch, :try_count => 0})
       end
     end
@@ -177,8 +182,7 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
         @logger.info "Batch sent"
       rescue Exception => e
         if count > @max_retries
-          @logger.fatal("Failed to send batch to Cassandra (error: #{e.to_s}) in #{@max_retries} tries",
-            :batch => batch)
+          @logger.fatal("Failed to send batch to Cassandra (error: #{e.to_s}) in #{@max_retries} tries")
         else
           @failed_batch_queue.push({:batch => batch, :try_count => count + 1})
           @logger.warn("Failed to send batch again (error: #{e.to_s}). Reschedule it.")
@@ -203,8 +207,6 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
       if msg.key?(key)
         begin
           msg[key] = case value
-          when 'int'
-            msg[key].to_i
           when 'uuid'
             Cassandra::Types::Uuid.new(msg[key])
           when 'timestamp'
@@ -213,15 +215,39 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
             Cassandra::Types::Inet.new(msg[key])
           when 'float'
             Cassandra::Types::Float.new(msg[key])
+          when 'varchar'
+            Cassandra::Types::Varchar.new(msg[key])
+          when 'text'
+            Cassandra::Types::Text.new(msg[key])
+          when 'blob'
+            Cassandra::Types::Blog.new(msg[key])
+          when 'ascii'
+            Cassandra::Types::Ascii.new(msg[key])
+          when 'bigint'
+            Cassandra::Types::Bigint.new(msg[key])
+          when 'counter'
+            Cassandra::Types::Counter.new(msg[key])
+          when 'int'
+            Cassandra::Types::Int.new(msg[key])
+          when 'varint'
+            Cassandra::Types::Varint.new(msg[key])
+          when 'boolean'
+            Cassandra::Types::Boolean.new(msg[key])
+          when 'decimal'
+            Cassandra::Types::Decimal.new(msg[key])
+          when 'double'
+            Cassandra::Types::Double.new(msg[key])
+          when 'timeuuid'
+            Cassandra::Types::Timeuuid.new(msg[key])
           end
         rescue Exception => e
           # Ok, cannot convert the value, let's assign it in default one
           if @ignore_bad_values
             bad_value = msg[key]
             msg[key] = case value
-            when 'int'
+            when 'int', 'varint', 'bigint', 'double', 'decimal', 'counter'
               0
-            when 'uuid'
+            when 'uuid', 'timeuuid'
               Cassandra::Uuid.new("00000000-0000-0000-0000-000000000000")
             when 'timestamp'
               Cassandra::Types::Timestamp.new(Time::parse("1970-01-01 00:00:00"))
@@ -229,13 +255,19 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
               Cassandra::Types::Inet.new("0.0.0.0")
             when 'float'
               Cassandra::Types::Float.new(0)
+            when 'boolean'
+              Cassandra::Types::Boolean.new(false)
+            when 'text', 'varchar', 'ascii'
+              Cassandra::Types::Float.new(0)
+            when 'blob'
+              Cassandra::Types::Blob.new(nil)
             end
             @logger.warn("Cannot convert `#{key}` value (`#{bad_value}`) to `#{value}` type, set to `#{msg[key]}`",
                          :exception => e, :backtrace => e.backtrace)
           else 
             @logger.fatal("Cannot convert `#{key}` value (`#{msg[key]}`) to `#{value}` type",
                           :exception => e, :backtrace => e.backtrace)
-            raise
+            raise "Cannot convert `#{key}` value (`#{msg[key]}`) to `#{value}` type"
           end
         end
       end
