@@ -71,16 +71,39 @@ output {
 }
 </code></pre>
 
-## Installation instructions
-For CentOS 6.6, logstash-1.4.2-1_2c0f5a1.noarch
-<pre><code>
-git clone https://github.com/otokarev/logstash-output-cassandra.git \
-&& cd logstash-output-cassandra.git \
-&& gem build logstash-output-cassandra.gemspec \
-&& env GEM_HOME=/opt/logstash/vendor/bundle/jruby/1.9/ GEM_PATH="" \
-&& java -jar /opt/logstash/vendor/jar/jru^C-complete-1.7.11.jar -S \
-&& gem install logstash-output-cassandra-0.1.0.gem
-</code></pre>
+## Running Plugin in Logstash
+### Run in a local Logstash clone
+
+Edit Logstash Gemfile and add the local plugin path, for example:
+```
+gem "logstash-output-cassandra", :path => "/your/local/logstash-output-cassandra"
+```
+
+Install plugin
+```
+bin/plugin install --no-verify
+```
+Run Logstash with the plugin
+```
+bin/logstash -e 'filter {cassandra {}}'
+```
+
+### Run in an installed Logstash
+
+You can use the same method to run your plugin in an installed Logstash by editing its Gemfile and pointing the :path to your local plugin development directory or you can build the gem and install it using:
+
+Build your plugin gem
+```
+gem build logstash-filter-awesome.gemspec
+```
+Install the plugin from the Logstash home
+```
+bin/plugin install /your/local/plugin/logstash-filter-awesome.gem
+```
+Run Logstash with the plugin
+```
+bin/logstash -e 'filter {cassandra {}}'
+```
 
 ## TODO
 
