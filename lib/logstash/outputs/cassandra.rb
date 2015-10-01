@@ -109,15 +109,12 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
     return unless output?(event)
 
     if @source
-      msg = event[@source]
+      tmp_msg = event[@source]
     else
-      msg = event.to_hash
-      # Filter out @timestamp, @version, etc
-      # to be able to use elasticsearch input plugin directly
-      msg.reject!{|key| %r{^@} =~ key}
+      tmp_msg = event
     end
 
-    if !msg.is_a?(Hash)
+    if !tmp_msg.respond_to?("to_hash")
         if @ignore_bad_messages
             @logger.warn("Failed to get message from source. Skip it.",
                 :event => event)
@@ -127,7 +124,15 @@ class LogStash::Outputs::Cassandra < LogStash::Outputs::Base
             :event => event)
         raise "Failed to get message from source. Source is empty or it is not a hash."
     end
-    
+    tmp_msg = tmp_msg.to_hash
+
+    # Make true ruby hash of msg got
+    msg = {}
+    tmp_msg.to_hash.each {|k, v| msg[k] = v}
+    # Filter out @timestamp, @version, etc
+    # to be able to use elasticsearch input plugin directly
+    msg.reject!{|key| %r{^@} =~ key}
+
     convert2cassandra_format! msg
 
     @batch_msg_queue.push(msg)
