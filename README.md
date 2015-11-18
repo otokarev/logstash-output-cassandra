@@ -85,7 +85,7 @@ bin/plugin install --no-verify
 ```
 Run Logstash with the plugin
 ```
-bin/logstash -e 'filter {cassandra {}}'
+bin/logstash -e 'output {cassandra {}}'
 ```
 
 ### Run in an installed Logstash
@@ -94,25 +94,16 @@ You can use the same method to run your plugin in an installed Logstash by editi
 
 Build your plugin gem
 ```
-gem build logstash-filter-awesome.gemspec
+gem build logstash-output-cassandra.gemspec
 ```
 Install the plugin from the Logstash home
 ```
-bin/plugin install /your/local/plugin/logstash-filter-awesome.gem
+bin/plugin install /your/local/plugin/logstash-output-cassandra.gem
 ```
 Run Logstash with the plugin
 ```
-bin/logstash -e 'filter {cassandra {}}'
+bin/logstash -e 'output {cassandra {}}'
 ```
 
 ## TODO
 
-## Contributing
-
-All contributions are welcome: ideas, patches, documentation, bug reports, complaints, and even something you drew up on a napkin.
-
-Programming is not a required skill. Whatever you've seen about open source and maintainers or community members  saying "send patches or die" - you will not see that here.
-
-It is more important to the community that you are able to contribute.
-
-For more information about contributing, see the [CONTRIBUTING](https://github.com/elasticsearch/logstash/blob/master/CONTRIBUTING.md) file.
