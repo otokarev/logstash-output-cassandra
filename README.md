@@ -1,3 +1,5 @@
+Currently this repository is abandoned, better maintenance you can get here https://github.com/eladamitpxi/logstash-output-cassandra/
+
 # Logstash Cassandra Output Plugin
 
 This is a plugin for [Logstash](https://github.com/elasticsearch/logstash).
