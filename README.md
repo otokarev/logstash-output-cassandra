@@ -1,4 +1,4 @@
-Currently this repository is abandoned, better maintenance you can get here https://github.com/eladamitpxi/logstash-output-cassandra/
+Currently this repository is abandoned, better maintenance you can get [here](https://github.com/eladamitpxi/logstash-output-cassandra/).
 
 # Logstash Cassandra Output Plugin
 
